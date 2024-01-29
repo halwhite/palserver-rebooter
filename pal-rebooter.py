@@ -43,6 +43,7 @@ is_restarting = False
 
 @discord_client.event
 async def on_ready():
+    await stop_palserver_if_already_exists()
     await start_palserver()
     # await asyncio.sleep(20)
     loop_calc.start()
@@ -58,6 +59,7 @@ async def loop_calc():
         msg = "サーバーが停止しています。再起動します。"
         print(msg)
         await send_message_to_discord(msg)
+        await backup_saved_directory()
         await start_palserver()
         return
     mem_percent = psutil.virtual_memory().percent
@@ -69,11 +71,29 @@ async def loop_calc():
     await discord_client.change_presence(activity=discord.Game(name=disc_name))
 
 
+async def stop_palserver_if_already_exists():
+    for proc in psutil.process_iter():
+        if proc.name() == "PalServer.exe":
+            msg = "Bot 起動時にすでにサーバーが起動しているため、{} 秒後に停止します。".format(
+                GRACEFUL_SHUTDOWN_TIME
+            )
+            print(msg)
+            await send_message_to_discord("@here " + msg)
+            await send_shutdown_command_to_palserver()
+            print("サーバー終了待機中...")
+            await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
+            proc.wait()
+            await backup_saved_directory()
+            msg = "サーバーを停止しました。"
+            print(msg)
+            # await send_message_to_discord(msg)
+
+
 async def start_palserver():
     global palserver_pipe
     msg = "サーバーを起動します。"
     print(msg)
-    await send_message_to_discord(msg)
+    # await send_message_to_discord(msg)
     palserver_pipe = subprocess.Popen(PALSERVER_EXE_PATH)
     msg = "サーバーを起動しました。"
     print(msg)
@@ -104,16 +124,7 @@ async def backup_saved_directory():
     # await send_message_to_discord(msg)
 
 
-async def restart_palserver():
-    global is_restarting
-    if is_restarting:
-        return
-    is_restarting = True
-    msg = "メモリ使用率が{}%を超えました。{}秒後に再起動します。".format(
-        RESTART_MEMORY_USAGE_THRESHOLD, GRACEFUL_SHUTDOWN_TIME
-    )
-    print(msg)
-    await send_message_to_discord("@here " + msg)
+async def send_shutdown_command_to_palserver():
     rcon = None
     for i in range(RCON_RETRY_COUNT):
         try:
@@ -138,6 +149,18 @@ async def restart_palserver():
         ret = rcon.command(command)
         print("サーバー終了コマンド送信結果: {}".format(ret))
 
+
+async def restart_palserver():
+    global is_restarting
+    if is_restarting:
+        return
+    is_restarting = True
+    msg = "メモリ使用率が{}%を超えました。{}秒後に再起動します。".format(
+        RESTART_MEMORY_USAGE_THRESHOLD, GRACEFUL_SHUTDOWN_TIME
+    )
+    print(msg)
+    await send_message_to_discord("@here " + msg)
+    await send_shutdown_command_to_palserver()
     print("サーバー終了待機中...")
     await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
     # TODO: 例外処理
