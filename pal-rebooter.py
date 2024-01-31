@@ -53,6 +53,7 @@ async def on_ready():
 @tasks.loop(seconds=LOOP_SEC)
 async def loop_calc():
     if is_restarting:
+        # should not reach here
         print("サーバー再起動中...")
         return
     if palserver_pipe.poll() is not None:
@@ -159,10 +160,13 @@ async def restart_palserver():
         RESTART_MEMORY_USAGE_THRESHOLD, GRACEFUL_SHUTDOWN_TIME
     )
     print(msg)
+
     await send_message_to_discord("@here " + msg)
+    shutdown_start_time = datetime.datetime.now()
     await send_shutdown_command_to_palserver()
     print("サーバー終了待機中...")
-    await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
+    # await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
+    await wait_until_shoutdown(shutdown_start_time)
     # TODO: 例外処理
     palserver_pipe.wait()
 
@@ -170,6 +174,17 @@ async def restart_palserver():
     await start_palserver()
     is_restarting = False
 
+
+async def wait_until_shoutdown(shutdown_start_time):
+    while True:
+        time_remaining = GRACEFUL_SHUTDOWN_TIME - (
+            datetime.datetime.now() - shutdown_start_time
+        ).seconds
+        disc_name = "再起動中… {} 秒後にシャットダウン".format(time_remaining)
+        await discord_client.change_presence(activity=discord.Game(name=disc_name))
+        await asyncio.sleep(5)
+        if time_remaining <= 0:
+            break
 
 async def send_message_to_discord(text):
     main_content = {"content": text}
