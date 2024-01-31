@@ -20,12 +20,13 @@ ini.read(inipath, "UTF-8")
 settings = ini["SETTINGS"]
 DISCORD_BOT_TOKEN = settings["DISCORD_BOT_TOKEN"]
 DISCORD_WEBHOOK_URL = settings["DISCORD_WEBHOOK_URL"]
-LOOP_SEC = int(settings["LOOP_SEC"])
-RESTART_MEMORY_USAGE_THRESHOLD = int(settings["RESTART_MEMORY_USAGE_THRESHOLD"])
-RCON_HOST = settings["RCON_HOST"]
-RCON_PORT = int(settings["RCON_PORT"])
+LOOP_SEC = int(settings.get("LOOP_SEC", 30)
+RESTART_MEMORY_USAGE_THRESHOLD = int(settings.get("RESTART_MEMORY_USAGE_THRESHOLD", 70)
+RCON_HOST = settings.get("RCON_HOST", "localhost")
+RCON_PORT = int(settings.get("RCON_PORT", 25575)
 RCON_PASSWORD = settings["RCON_PASSWORD"]
 GRACEFUL_SHUTDOWN_TIME = int(settings["GRACEFUL_SHUTDOWN_TIME"])
+SHUTDOWN_NOTIFICATION_INTERVAL = int(settings.get("SHUTDOWN_NOTIFICATION_INTERVAL", 30)
 STEAM_CMD_PATH = settings["STEAM_CMD_PATH"]
 
 
@@ -86,7 +87,7 @@ async def stop_palserver_if_already_exists():
                 await send_shutdown_command_to_palserver(rcon)
                 print("サーバー終了待機中...")
                 # await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
-                await wait_until_shoutdown(rcon, shutdown_start_time)
+                await wait_until_shutdown(rcon, shutdown_start_time)
             proc.wait()
             await backup_saved_directory()
             msg = "サーバーを停止しました。"
@@ -186,7 +187,7 @@ async def restart_palserver():
         await send_shutdown_command_to_palserver(rcon)
         print("サーバー終了待機中...")
         # await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
-        await wait_until_shoutdown(rcon, shutdown_start_time)
+        await wait_until_shutdown(rcon, shutdown_start_time)
     # TODO: 例外処理
     palserver_pipe.wait()
 
@@ -195,12 +196,12 @@ async def restart_palserver():
     is_restarting = False
 
 
-async def wait_until_shoutdown(
-    rcon, shutdown_start_time, shoutdown_time=GRACEFUL_SHUTDOWN_TIME
+async def wait_until_shutdown(
+    rcon, shutdown_start_time, shutdown_time=GRACEFUL_SHUTDOWN_TIME
 ):
     while True:
         time_remaining = (
-            shoutdown_time - (datetime.datetime.now() - shutdown_start_time).seconds
+            shutdown_time - (datetime.datetime.now() - shutdown_start_time).seconds
         )
         if time_remaining <= 0:
             break
