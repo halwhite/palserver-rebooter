@@ -67,7 +67,7 @@ async def loop_calc():
     # await send_message_to_discord(mem_percent)
     if mem_percent > RESTART_MEMORY_USAGE_THRESHOLD:
         await restart_palserver()
-    disc_name = "メモリ使用率" + str(mem_percent)
+    disc_name = "メモリ使用率 {} %".format(mem_percent)
     await discord_client.change_presence(activity=discord.Game(name=disc_name))
 
 
