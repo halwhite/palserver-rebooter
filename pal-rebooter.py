@@ -80,9 +80,13 @@ async def stop_palserver_if_already_exists():
             )
             print(msg)
             await send_message_to_discord("@here " + msg)
-            await send_shutdown_command_to_palserver()
-            print("サーバー終了待機中...")
-            await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
+            shutdown_start_time = datetime.datetime.now()
+            rcon = await connect_rcon()
+            with rcon:
+                await send_shutdown_command_to_palserver(rcon)
+                print("サーバー終了待機中...")
+                # await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
+                await wait_until_shoutdown(rcon, shutdown_start_time)
             proc.wait()
             await backup_saved_directory()
             msg = "サーバーを停止しました。"
@@ -125,7 +129,7 @@ async def backup_saved_directory():
     # await send_message_to_discord(msg)
 
 
-async def send_shutdown_command_to_palserver():
+async def connect_rcon():
     rcon = None
     for i in range(RCON_RETRY_COUNT):
         try:
@@ -141,14 +145,28 @@ async def send_shutdown_command_to_palserver():
         print(msg)
         await send_message_to_discord(msg)
         return exit(1)
-    with rcon:
-        # 日本語は文字化けする。
-        # 空白が入っているとスペースの前の単語しか表示されないため、_で置換。
-        msg = "Will_shutdown_after_{}sec.".format(GRACEFUL_SHUTDOWN_TIME)
-        command = "shutdown {} {}".format(GRACEFUL_SHUTDOWN_TIME, msg)
-        print("サーバー終了コマンド送信: {}".format(command))
+    return rcon
+
+
+async def send_shutdown_command_to_palserver(rcon, seconds=GRACEFUL_SHUTDOWN_TIME):
+    # 日本語は文字化けする。
+    # 空白が入っているとスペースの前の単語しか表示されないため、_で置換。
+    msg = "Shutdown_in_{}_seconds.".format(seconds)
+    command = "shutdown {} {}".format(seconds, msg)
+    print("サーバー終了コマンド送信: {}".format(command))
+    ret = rcon.command(command)
+    print("サーバー終了コマンド送信結果: {}".format(ret))
+
+
+async def send_broadcast_command_to_palserver(rcon, msg):
+    command = "broadcast {}".format(msg)
+    print("サーバーブロードキャスト送信: {}".format(command))
+    try:
         ret = rcon.command(command)
-        print("サーバー終了コマンド送信結果: {}".format(ret))
+    except Exception as e:
+        print("サーバーブロードキャスト送信失敗: {}".format(e))
+        return
+    print("サーバーブロードキャスト送信結果: {}".format(ret))
 
 
 async def restart_palserver():
@@ -163,10 +181,12 @@ async def restart_palserver():
 
     await send_message_to_discord("@here " + msg)
     shutdown_start_time = datetime.datetime.now()
-    await send_shutdown_command_to_palserver()
-    print("サーバー終了待機中...")
-    # await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
-    await wait_until_shoutdown(shutdown_start_time)
+    rcon = await connect_rcon()
+    with rcon:
+        await send_shutdown_command_to_palserver(rcon)
+        print("サーバー終了待機中...")
+        # await asyncio.sleep(GRACEFUL_SHUTDOWN_TIME)
+        await wait_until_shoutdown(rcon, shutdown_start_time)
     # TODO: 例外処理
     palserver_pipe.wait()
 
@@ -175,16 +195,22 @@ async def restart_palserver():
     is_restarting = False
 
 
-async def wait_until_shoutdown(shutdown_start_time):
+async def wait_until_shoutdown(
+    rcon, shutdown_start_time, shoutdown_time=GRACEFUL_SHUTDOWN_TIME
+):
     while True:
-        time_remaining = GRACEFUL_SHUTDOWN_TIME - (
-            datetime.datetime.now() - shutdown_start_time
-        ).seconds
-        disc_name = "再起動中… {} 秒後にシャットダウン".format(time_remaining)
-        await discord_client.change_presence(activity=discord.Game(name=disc_name))
-        await asyncio.sleep(5)
+        time_remaining = (
+            shoutdown_time - (datetime.datetime.now() - shutdown_start_time).seconds
+        )
         if time_remaining <= 0:
             break
+        disc_name = "再起動中… {} 秒後にシャットダウン".format(time_remaining)
+        await discord_client.change_presence(activity=discord.Game(name=disc_name))
+        await send_broadcast_command_to_palserver(
+            rcon, "Shutdown_in_{}_seconds.".format(time_remaining)
+        )
+        await asyncio.sleep(5)
+
 
 async def send_message_to_discord(text):
     main_content = {"content": text}
