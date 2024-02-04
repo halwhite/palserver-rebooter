@@ -20,13 +20,15 @@ ini.read(inipath, "UTF-8")
 settings = ini["SETTINGS"]
 DISCORD_BOT_TOKEN = settings["DISCORD_BOT_TOKEN"]
 DISCORD_WEBHOOK_URL = settings["DISCORD_WEBHOOK_URL"]
-LOOP_SEC = int(settings.get("LOOP_SEC", 30)
-RESTART_MEMORY_USAGE_THRESHOLD = int(settings.get("RESTART_MEMORY_USAGE_THRESHOLD", 70)
+LOOP_SEC = int(settings.get("LOOP_SEC", 30))
+RESTART_MEMORY_USAGE_THRESHOLD = int(settings.get("RESTART_MEMORY_USAGE_THRESHOLD", 70))
+SERVER_IP_ADDRESS = settings["SERVER_IP_ADDRESS"]
+SERVER_PORT = settings.get("SERVER_PORT", 8211)
 RCON_HOST = settings.get("RCON_HOST", "localhost")
-RCON_PORT = int(settings.get("RCON_PORT", 25575)
+RCON_PORT = int(settings.get("RCON_PORT", 25575))
 RCON_PASSWORD = settings["RCON_PASSWORD"]
 GRACEFUL_SHUTDOWN_TIME = int(settings["GRACEFUL_SHUTDOWN_TIME"])
-SHUTDOWN_NOTIFICATION_INTERVAL = int(settings.get("SHUTDOWN_NOTIFICATION_INTERVAL", 30)
+SHUTDOWN_NOTIFICATION_INTERVAL = int(settings.get("SHUTDOWN_NOTIFICATION_INTERVAL", 30))
 STEAM_CMD_PATH = settings["STEAM_CMD_PATH"]
 
 
@@ -101,7 +103,9 @@ async def start_palserver():
     print(msg)
     # await send_message_to_discord(msg)
     palserver_pipe = subprocess.Popen(PALSERVER_EXE_PATH)
-    msg = "サーバーを起動しました。"
+    msg = "サーバーを起動しました。\n接続はこちら👇```{}:{}```".format(
+        SERVER_IP_ADDRESS, SERVER_PORT
+    )
     print(msg)
     await send_message_to_discord("@here " + msg)
 
